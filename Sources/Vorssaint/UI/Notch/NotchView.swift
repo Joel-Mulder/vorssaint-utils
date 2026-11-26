@@ -42,8 +42,8 @@ struct NotchView: View {
             // stops scrolling between cards and the island loses focus. A fill
             // too faint to see takes hit tests and keeps the surface in this
             // window, as the opaque black of a black island does.
-            .background(shape.offset(x: service.surfaceShift).fill(Color.black.opacity(0.01)))
-            .contentShape(shape.offset(x: service.surfaceShift))
+            .background(shape.offset(x: hitShift).fill(Color.black.opacity(0.01)))
+            .contentShape(shape.offset(x: hitShift))
             // The backdrop is a separate, non-interactive hosting view. Claim
             // empty space here so SwiftUI keeps the taps that land on it. This
             // draws nothing, so it does not hold a click in this window at the
@@ -224,6 +224,9 @@ struct NotchView: View {
 
     /// The island floats as a capsule, whose strips run end to end.
     private var floats: Bool { service.geometry.floats }
+    /// A shifted strip keeps its shape over the camera; the bubble beside the
+    /// system's pill is its own window, already where it shows.
+    private var hitShift: CGFloat { service.showsSystemIslandBubble ? 0 : service.surfaceShift }
 
     /// A strip and the companion at rest swap through black, where a
     /// crossfade would show it half faded over the strip's text.

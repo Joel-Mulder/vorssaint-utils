@@ -977,29 +977,45 @@ final class NotchService: ObservableObject {
     private var systemIslandClearance: CGFloat = 0
     private var systemIslandTimer: Timer?
 
-    /// The closed island reaches past the system's pill, which takes every
-    /// click on it, so the island can still be opened while it shows.
+    /// Where macOS's own pill starts, in global points, while it shows one.
+    private var systemIslandMinX: CGFloat?
+
+    /// While the system shows its pill, the closed island steps aside as a
+    /// round bubble just left of it, as a phone shows a second activity: a
+    /// strip reaching past the pill would show as a second island around it,
+    /// as the system outlines its own. What drops below the strip, such as a
+    /// notification's preview, stays where it is.
+    var showsSystemIslandBubble: Bool {
+        guard !expanded, geometry.cameraIsPill, systemIslandMinX != nil else { return false }
+        return baseSurfaceSize.height <= geometry.stripHeight + 6
+    }
+
+    /// The bubble's surface: a circle as tall as the strip, with the
+    /// silhouette's shoulders on both sides of it.
+    private var systemIslandBubbleSize: CGSize {
+        let height = geometry.stripHeight
+        return CGSize(width: (height + NotchLayout.shoulder(height: height) * 2).rounded(.up), height: height)
+    }
+
     var surfaceSize: CGSize {
-        var size = baseSurfaceSize
-        if !expanded, geometry.cameraIsPill, systemIslandClearance > size.width {
-            size.width = min(systemIslandClearance, geometry.screen.width - 24)
-        }
-        return size
+        showsSystemIslandBubble ? systemIslandBubbleSize : baseSurfaceSize
     }
 
     private func readSystemIsland() {
         guard running, geometry.cameraIsPill, let camera = geometry.physicalCamera else {
             if systemIslandClearance != 0 {
                 systemIslandClearance = 0
+                systemIslandMinX = nil
                 geometry.systemIslandWidth = 0
                 refreshPresentation()
             }
             return
         }
-        let clearance = NotchSystemIsland.clearance(
-            cameraMidX: camera.midX, indicators: NotchSystemIsland.indicators(nearCameraAt: camera.midX))
+        let indicators = NotchSystemIsland.indicators(nearCameraAt: camera.midX)
+        let clearance = NotchSystemIsland.clearance(cameraMidX: camera.midX, indicators: indicators)
         guard clearance != systemIslandClearance else { return }
         systemIslandClearance = clearance
+        systemIslandMinX = indicators.map(\.minX).min().map { $0 - NotchSystemIsland.leadingReach }
         geometry.systemIslandWidth = NotchSystemIsland.pillWidth(clearance: clearance)
         refreshPresentation()
     }
@@ -1041,6 +1057,11 @@ final class NotchService: ObservableObject {
     /// notice beside a camera, or the music strip naming its song, reaches
     /// further toward its wider side. A capsule runs its strips end to end.
     var surfaceShift: CGFloat {
+        if showsSystemIslandBubble, let left = systemIslandMinX {
+            // A clear gap from the system's pill, so the two read as two.
+            let diameter = geometry.stripHeight
+            return (left - NotchSystemIsland.bubbleGap - diameter / 2 - geometry.screen.midX).rounded()
+        }
         guard !geometry.floats, !fullscreenCompact, captureControls == nil, !expanded, !dragPlaceholder else { return 0 }
         if let notice { return noticeExpanded ? 0 : geometry.noticeShift(notice.wings(in: geometry)) }
         return namedMusicWings.map { ($0.trailing - $0.leading) / 2 } ?? 0
@@ -2807,6 +2828,9 @@ final class NotchService: ObservableObject {
             activationRect = captureControlsCollapsed ? CGRect(origin: .zero, size: size) : .zero
         } else if stripNotice != nil || dragPlaceholder {
             activationRect = .zero
+        } else if showsSystemIslandBubble {
+            // The bubble has no camera to toggle from: all of it opens the island.
+            activationRect = CGRect(origin: .zero, size: size)
         } else if showsCompactActivityPicker {
             let strip = compactActivityGeometry.compactActivitySize
             activationRect = compactActivityGeometry.activationArea(

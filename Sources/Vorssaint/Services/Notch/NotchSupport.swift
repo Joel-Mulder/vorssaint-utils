@@ -161,7 +161,7 @@ enum NotchCameraShape: String, CaseIterable {
 /// microphone, camera or screen is in use, the system grows a black pill
 /// around the camera with its privacy indicators, drawn above every app and
 /// taking every click on it. It is not ours to hide; the island instead
-/// reaches past it on both sides so that something of it can still be clicked.
+/// steps aside as a bubble beside it so that it can still be clicked.
 /// The system draws only the indicators as windows, so the pill's extent is
 /// measured from them: on a 14-inch OLED MacBook Pro the microphone's pill
 /// starts 102.5 points left of its indicator and ends 25.5 points right of it.
@@ -170,6 +170,8 @@ enum NotchSystemIsland {
     static let trailingReach: CGFloat = 25.5
     /// What the island shows on each side of the system's pill: room for a click.
     static let wing: CGFloat = 30
+    /// Between the system's pill and the bubble the closed island becomes beside it.
+    static let bubbleGap: CGFloat = 8
 
     /// The privacy indicators on screen near a camera centred at `cameraMidX`,
     /// in global coordinates with the origin at the top left.
