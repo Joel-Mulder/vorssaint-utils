@@ -989,13 +989,18 @@ final class NotchService: ObservableObject {
 
     private func readSystemIsland() {
         guard running, geometry.cameraIsPill, let camera = geometry.physicalCamera else {
-            if systemIslandClearance != 0 { systemIslandClearance = 0; refreshPresentation() }
+            if systemIslandClearance != 0 {
+                systemIslandClearance = 0
+                geometry.systemIslandWidth = 0
+                refreshPresentation()
+            }
             return
         }
         let clearance = NotchSystemIsland.clearance(
             cameraMidX: camera.midX, indicators: NotchSystemIsland.indicators(nearCameraAt: camera.midX))
         guard clearance != systemIslandClearance else { return }
         systemIslandClearance = clearance
+        geometry.systemIslandWidth = NotchSystemIsland.pillWidth(clearance: clearance)
         refreshPresentation()
     }
 
@@ -3679,6 +3684,7 @@ final class NotchService: ObservableObject {
         // Read with the floating buttons rather than on every layout pass,
         // which would decode them each time.
         next.sectionsButtonInRow = !access.actions.contains(.explore)
+        next.systemIslandWidth = NotchSystemIsland.pillWidth(clearance: systemIslandClearance)
         if next != geometry { menuSpaceGeneration += 1; geometry = next }
         // A new camera or bar, such as a notch fit being adjusted, measures the
         // menus again at once rather than leaving the wings off until the timer.

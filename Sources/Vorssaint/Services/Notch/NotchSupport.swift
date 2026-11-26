@@ -196,6 +196,12 @@ enum NotchSystemIsland {
         let half = max(cameraMidX - left, right - cameraMidX)
         return ((half + wing) * 2).rounded(.up)
     }
+
+    /// The system's pill itself, as wide on both sides of the camera as its
+    /// wider side reaches, or zero when the system shows none.
+    static func pillWidth(clearance: CGFloat) -> CGFloat {
+        clearance > 0 ? clearance - wing * 2 : 0
+    }
 }
 
 enum NotchSize: String, CaseIterable {
@@ -2358,6 +2364,10 @@ struct NotchGeometry: Equatable {
     /// The 28-point controls a page that wraps the camera hands the row,
     /// as the player's lyrics and queue toggles while a song plays.
     var pageTrailingControls = 0
+    /// The width of macOS's own pill around a pill camera, centred on it,
+    /// while the system shows one: the open island's top row keeps clear of
+    /// all of it, as it does of the camera. Zero otherwise.
+    var systemIslandWidth: CGFloat = 0
     private var allowsActivityFooter = true
     private var minimumCompactWidth: CGFloat = 0
     /// Narrower wings than this are dropped rather than drawn cramped.
@@ -2441,7 +2451,8 @@ struct NotchGeometry: Equatable {
     /// leaves, or the player's cover. Narrower layouts keep a full row below
     /// the camera.
     var headerCameraGap: CGFloat {
-        isNotched && !requiresFullWidthHeader && contentWidth >= cameraWidth + pageBandSide * 2 ? cameraWidth : 0
+        let gap = max(cameraWidth, systemIslandWidth)
+        return isNotched && !requiresFullWidthHeader && contentWidth >= gap + pageBandSide * 2 ? gap : 0
     }
     /// What each side of the camera keeps for the page's row.
     var pageBandSide: CGFloat { pageTop == .wrapsCamera ? NotchLayout.musicBandSide : 100 }
