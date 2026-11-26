@@ -267,6 +267,14 @@ struct NotchPillFit: Equatable {
 
     struct Keys { let width, height, offset, offsetX: String }
 
+    /// Behind the system's pill the island can grow well past the camera,
+    /// so that state's width reaches four times as far as the camera fit's.
+    static let behindWidthRange = -80.0...80.0
+
+    static func widthRange(for state: NotchPillState) -> ClosedRange<Double> {
+        state == .behind ? behindWidthRange : NotchCameraFit.widthRange
+    }
+
     static func keys(for state: NotchPillState) -> Keys {
         switch state {
         case .bare: return Keys(width: DefaultsKey.notchCameraFitWidth, height: DefaultsKey.notchCameraFitHeight,
@@ -285,7 +293,8 @@ struct NotchPillFit: Equatable {
                 .rounded() / 2
         }
         return NotchPillFit(camera: NotchCameraFit(width: defaults.double(forKey: keys.width),
-                                                   height: defaults.double(forKey: keys.height)),
+                                                   height: defaults.double(forKey: keys.height),
+                                                   widthRange: widthRange(for: state)),
                             offset: half(keys.offset), offsetX: half(keys.offsetX))
     }
 }
@@ -333,8 +342,8 @@ struct NotchCameraFit: Equatable {
     /// Whole points keep the island centred on the camera's pixels, and half
     /// points are whole pixels on the notched panels; a value written by hand
     /// is brought back to those steps.
-    init(width: Double, height: Double) {
-        self.width = NotchSize.clamped(width, to: Self.widthRange, fallback: 0).rounded()
+    init(width: Double, height: Double, widthRange: ClosedRange<Double> = Self.widthRange) {
+        self.width = NotchSize.clamped(width, to: widthRange, fallback: 0).rounded()
         self.height = (NotchSize.clamped(height, to: Self.heightRange, fallback: 0) * 2).rounded() / 2
     }
 

@@ -1061,7 +1061,7 @@ struct NotchSettings: View {
             .pickerStyle(.segmented).labelsHidden()
             Grid(alignment: .leading, horizontalSpacing: 12, verticalSpacing: 10) {
                 fitSlider(text.width, card: card, value: bubble ? $bubbleFitWidth : $behindFitWidth,
-                          range: NotchCameraFit.widthRange, step: 1)
+                          range: NotchPillFit.widthRange(for: bubble ? .bubble : .behind), step: 1)
                 fitSlider(text.height, card: card, value: bubble ? $bubbleFitHeight : $behindFitHeight,
                           range: NotchCameraFit.heightRange, step: 0.5)
                 fitSlider(text.upDown, card: card, value: bubble ? $bubbleOffset : $behindOffset,
