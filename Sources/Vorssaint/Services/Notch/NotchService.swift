@@ -1070,9 +1070,20 @@ final class NotchService: ObservableObject {
         guard running, !expanded, geometry.cameraIsPill, let pill = shown, let panel,
               let screen = NSScreen.screens.first?.frame else { tapZone.hide(); return }
         tapZone.lit = lit
-        // The window list counts from the top of the primary display.
-        let flipped = CGRect(x: pill.minX, y: screen.maxY - pill.maxY, width: pill.width, height: pill.height)
-        var area = flipped.insetBy(dx: -zone.width, dy: -zone.height)
+        // As large as the system's pill and the zone's margins, centred on the
+        // bare pill as fitted to the camera: the system's own pill reaches
+        // further to one side, while a click reaches for the camera.
+        let centre: CGPoint
+        if let display = NSScreen.screens.first(where: { $0.frame == geometry.screen }) {
+            let bare = baseGeometry(for: display, state: .bare)
+            let frame = bare.frame(for: bare.restingSize(showsContent: false))
+            centre = CGPoint(x: frame.midX, y: frame.midY)
+        } else {
+            // The window list counts from the top of the primary display.
+            centre = CGPoint(x: pill.midX, y: screen.maxY - pill.midY)
+        }
+        var area = CGRect(x: centre.x - pill.width / 2, y: centre.y - pill.height / 2,
+                          width: pill.width, height: pill.height).insetBy(dx: -zone.width, dy: -zone.height)
         area.size.height = min(area.height, geometry.screen.maxY - area.minY)
         tapZone.show(area, level: panel.level, below: panel.windowNumber) { [weak self] in self?.open() }
         lastTapZone = area
@@ -3806,9 +3817,9 @@ final class NotchService: ObservableObject {
     }
 
     /// The island's geometry on a display, before its menus are measured.
-    private func baseGeometry(for screen: NSScreen) -> NotchGeometry {
+    private func baseGeometry(for screen: NSScreen, state: NotchPillState? = nil) -> NotchGeometry {
         // A pill camera's fit follows what the system shows around it; a notch has the one.
-        let pillFit = NotchPillFit.current(for: pillState)
+        let pillFit = NotchPillFit.current(for: state ?? pillState)
         let cameraWidth: CGFloat
         if let left = screen.auxiliaryTopLeftArea, let right = screen.auxiliaryTopRightArea {
             cameraWidth = max(0, right.minX - left.maxX)
