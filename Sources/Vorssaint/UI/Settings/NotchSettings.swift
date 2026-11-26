@@ -87,6 +87,8 @@ struct NotchSettings: View {
     @AppStorage(DefaultsKey.notchCustomHeight) private var customHeight = NotchSize.defaultHeight
     @AppStorage(DefaultsKey.notchCameraFitWidth) private var cameraFitWidth = 0.0
     @AppStorage(DefaultsKey.notchCameraFitHeight) private var cameraFitHeight = 0.0
+    @AppStorage(DefaultsKey.notchPillOffset) private var pillOffset = 0.0
+    @AppStorage(DefaultsKey.notchPillOffsetX) private var pillOffsetX = 0.0
     @AppStorage(DefaultsKey.notchCapsuleFitWidth) private var capsuleFitWidth = 0.0
     @AppStorage(DefaultsKey.notchCapsuleFitHeight) private var capsuleFitHeight = 0.0
     @AppStorage(DefaultsKey.notchCapsuleFitDrop) private var capsuleFitDrop = 0.0
@@ -124,6 +126,7 @@ struct NotchSettings: View {
          String(timerEnabled), String(timerSoundEnabled), String(hideTimerCountdown),
          String(cameraEnabled), String(accessoriesEnabled), String(outlineEnabled), String(hideMenuBarGap),
          String(customWidth), String(customHeight), String(cameraFitWidth), String(cameraFitHeight),
+         String(pillOffset), String(pillOffsetX),
          String(capsuleFitWidth), String(capsuleFitHeight), String(capsuleFitDrop), String(hapticFeedback),
          String(shelfWindow), String(dragReveal), String(captureControls), String(quickPanel), String(appPanel),
          String(hoverExpand), String(hideUntilHover), String(hiddenShowsActivity), String(hideInFullscreen),
@@ -295,6 +298,13 @@ struct NotchSettings: View {
                                   range: NotchCameraFit.widthRange, step: 1)
                         fitSlider(text.height, card: text.cameraFit, value: $cameraFitHeight,
                                   range: NotchCameraFit.heightRange, step: 0.5)
+                        // A floating pill can also be moved, as a hanging notch cannot.
+                        if NotchSupport.hasPillCameraDisplay {
+                            fitSlider(text.upDown, card: text.cameraFit, value: $pillOffset,
+                                      range: NotchCameraShape.offsetRange, step: 0.5)
+                            fitSlider(text.leftRight, card: text.cameraFit, value: $pillOffsetX,
+                                      range: NotchCameraShape.offsetRange, step: 0.5)
+                        }
                     }
                     Text(text.cameraFitHint).font(.caption).foregroundStyle(.secondary)
                 }

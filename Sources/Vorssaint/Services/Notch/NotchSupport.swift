@@ -155,6 +155,18 @@ enum NotchCameraShape: String, CaseIterable {
     /// The system's island ends this far above the band's bottom edge, so
     /// a surface that reaches the whole band shows a sliver below it.
     static let pillBottomGap: CGFloat = 0.5
+    /// A hand correction moving the pill down (positive) or up, in half points.
+    static let offsetRange = -6.0...6.0
+
+    static func currentOffset(in defaults: UserDefaults = .standard) -> CGFloat {
+        (NotchSize.clamped(defaults.double(forKey: DefaultsKey.notchPillOffset), to: offsetRange, fallback: 0) * 2)
+            .rounded() / 2
+    }
+    /// The same sideways, right positive.
+    static func currentOffsetX(in defaults: UserDefaults = .standard) -> CGFloat {
+        (NotchSize.clamped(defaults.double(forKey: DefaultsKey.notchPillOffsetX), to: offsetRange, fallback: 0) * 2)
+            .rounded() / 2
+    }
 }
 
 /// macOS's own island on a display whose camera is a pill. While the
@@ -223,8 +235,8 @@ enum NotchSize: String, CaseIterable {
 /// to points while the cutout follows the panel's own pixels, so on some Macs
 /// and resolutions an edge of the real notch can show past the island.
 struct NotchCameraFit: Equatable {
-    static let widthRange = -10.0...10.0
-    static let heightRange = -6.0...6.0
+    static let widthRange = -20.0...20.0
+    static let heightRange = -10.0...10.0
     static let zero = NotchCameraFit(width: 0, height: 0)
 
     let width: CGFloat
@@ -1725,6 +1737,17 @@ enum NotchEvent: String, CaseIterable {
 }
 
 enum NotchSupport {
+    /// Whether a connected display's camera is a floating pill, as on the
+    /// OLED MacBook Pros, which the camera fit can also move.
+    static var hasPillCameraDisplay: Bool {
+        let shape = NotchCameraShape.current()
+        return NSScreen.screens.contains { screen in
+            guard screen.safeAreaInsets.top > 0, let left = screen.auxiliaryTopLeftArea,
+                  let right = screen.auxiliaryTopRightArea else { return false }
+            return shape.isPill(width: right.minX - left.maxX, height: screen.safeAreaInsets.top)
+        }
+    }
+
     /// Whether a connected display has a camera housing, wherever the island
     /// is: it can be off, withdrawn with the lid closed or on another display.
     static var hasNotchedDisplay: Bool {
@@ -2342,6 +2365,8 @@ struct NotchGeometry: Equatable {
     /// from it. The island keeps a notch's layout, its content on either side
     /// of the camera, but is drawn as a rounded surface wrapping the pill.
     let cameraIsPill: Bool
+    /// A hand correction moving a pill's island sideways, open or closed.
+    let pillShiftX: CGFloat
     /// What the silhouette is drawn with: a capsule's own gap, none for a
     /// pill, which is rounded all round inside its surface, or nil to hang
     /// from the top edge.
@@ -2380,7 +2405,7 @@ struct NotchGeometry: Equatable {
          customWidth: Double = NotchSize.defaultWidth, customHeight: Double = NotchSize.defaultHeight,
          cameraFit: NotchCameraFit = .zero, silhouette: NotchSilhouette = .notch, capsuleFit: NotchCapsuleFit = .zero,
          hideMenuBarGap: Bool = false, outline: Bool = false, barEdge: CGFloat = 0,
-         cameraShape: NotchCameraShape = .notch) {
+         cameraShape: NotchCameraShape = .notch, pillOffset: CGFloat = 0, pillOffsetX: CGFloat = 0) {
         self.screen = screen
         self.layout = layout
         self.customWidth = NotchSize.clamped(customWidth, to: NotchSize.widthRange, fallback: NotchSize.defaultWidth)
@@ -2389,6 +2414,7 @@ struct NotchGeometry: Equatable {
         isNotched = safeAreaTop.isFinite && safeAreaTop > 0 && cameraWidth.isFinite && cameraWidth > 0
         let pill = isNotched && cameraShape.isPill(width: cameraWidth, height: safeAreaTop)
         cameraIsPill = pill
+        pillShiftX = pill ? pillOffsetX : 0
         // A pill starts below the top edge, on half points: whole pixels.
         let pillTop = pill ? (safeAreaTop * NotchCameraShape.pillTopShare * 2).rounded() / 2 : 0
         physicalCamera = isNotched ? CGRect(x: physicalCameraX ?? (screen.midX - cameraWidth / 2),
@@ -2403,7 +2429,7 @@ struct NotchGeometry: Equatable {
         floatingGap = gap
         // A fitted capsule grows from its top edge, keeping its margins.
         let capsuleFit = gap == nil ? NotchCapsuleFit.zero : capsuleFit
-        floatingDrop = pill ? pillTop : capsuleFit.drop
+        floatingDrop = pill ? max(0, pillTop + pillOffset) : capsuleFit.drop
         capsuleWidthFit = capsuleFit.width
         // The bar ends in a hairline, `barEdge` thick, that reads as its edge:
         // the capsule's margin below is measured from it, as the one above is
@@ -2933,7 +2959,7 @@ struct NotchGeometry: Equatable {
     }
     var appPanelSize: CGSize { contentSize(for: expandedSize(module: .tools, panel: true)) }
     func frame(for size: CGSize) -> CGRect {
-        CGRect(x: screen.midX + surfaceShift - size.width / 2,
+        CGRect(x: screen.midX + pillShiftX + surfaceShift - size.width / 2,
                y: screen.maxY - floatingDrop - size.height,
                width: size.width, height: size.height)
     }
