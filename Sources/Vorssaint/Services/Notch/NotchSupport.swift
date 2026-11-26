@@ -155,6 +155,12 @@ enum NotchCameraShape: String, CaseIterable {
     /// The system's island ends this far above the band's bottom edge, so
     /// a surface that reaches the whole band shows a sliver below it.
     static let pillBottomGap: CGFloat = 0.5
+    /// The fit that lines the island up with the camera pill, the sliders'
+    /// zero: on a 14-inch OLED MacBook Pro at 1800 x 1182 points, tuned by
+    /// eye with the alignment guides. Width and height in points, growing
+    /// about the pill's centre; offset moves it down.
+    static let calibration = (width: CGFloat(15), height: CGFloat(-0.5), offset: CGFloat(0.5))
+
     /// A hand correction moving the pill down (positive) or up, in half points.
     static let offsetRange = -6.0...6.0
 
@@ -2422,6 +2428,11 @@ struct NotchGeometry: Equatable {
                                            height: safeAreaTop - pillTop - (pill ? NotchCameraShape.pillBottomGap : 0)) : nil
         // Only a physical camera has an outline to match; a simulated one follows the bar.
         let fit = isNotched ? cameraFit : .zero
+        // A pill starts from the fit that lines it up with the camera, so
+        // the sliders at zero match the hardware and adjust from there.
+        let fitWidth = fit.width + (pill ? NotchCameraShape.calibration.width : 0)
+        let fitHeight = fit.height + (pill ? NotchCameraShape.calibration.height : 0)
+        let pillOffset = pillOffset + (pill ? NotchCameraShape.calibration.offset : 0)
         // A capsule replaces only a simulated cutout. It is as wide as the
         // cutout of the bar it sits in with its usual margins, so a bar hidden
         // on one display and shown on another draws the same capsule on both.
@@ -2431,7 +2442,7 @@ struct NotchGeometry: Equatable {
         let capsuleFit = gap == nil ? NotchCapsuleFit.zero : capsuleFit
         // A pill's fit grows it evenly about its centre, as the width does, on
         // half points: the top moves by half the height's change.
-        let pillGrowth = pill ? (fit.height / 2 * 2).rounded(.down) / 2 : 0
+        let pillGrowth = pill ? (fitHeight / 2 * 2).rounded(.down) / 2 : 0
         floatingDrop = pill ? max(0, pillTop + pillOffset - pillGrowth) : capsuleFit.drop
         capsuleWidthFit = capsuleFit.width
         // The bar ends in a hairline, `barEdge` thick, that reads as its edge:
@@ -2448,7 +2459,7 @@ struct NotchGeometry: Equatable {
         // A simulated cutout sits on the menu bar, where its outline already shows.
         let room = isNotched && outline ? NotchLayout.outlineWidth : 0
         outlineRoom = room
-        self.cameraWidth = min(isNotched ? max(0, cameraWidth + fit.width + room * 2)
+        self.cameraWidth = min(isNotched ? max(0, cameraWidth + fitWidth + room * 2)
                                : gap == nil ? simulated : (simulated + capsuleFit.width).rounded(),
                                screen.width * 0.7)
         if isNotched {
@@ -2457,7 +2468,7 @@ struct NotchGeometry: Equatable {
             // A pill floats inside the bar, so there is no strip below it to hide.
             let baseHeight = pill ? safeAreaTop - pillTop - NotchCameraShape.pillBottomGap
                 : hideMenuBarGap ? max(safeAreaTop, barHeight) : safeAreaTop
-            cameraHeight = min(max(0, baseHeight + fit.height + room), 64)
+            cameraHeight = min(max(0, baseHeight + fitHeight + room), 64)
         } else {
             cameraHeight = stripHeight
         }
