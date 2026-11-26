@@ -186,6 +186,13 @@ enum NotchCameraShape: String, CaseIterable {
 enum NotchSystemIsland {
     static let leadingReach: CGFloat = 102.5
     static let trailingReach: CGFloat = 25.5
+    /// The microphone's pill on a 14-inch OLED MacBook Pro, relative to the
+    /// camera's centre and the top of the display, for showing the tap zone
+    /// while the system shows nothing.
+    static let typicalLeft: CGFloat = 72.5
+    static let typicalTop: CGFloat = 7.5
+    static let typicalWidth: CGFloat = 157
+    static let typicalHeight: CGFloat = 39.5
     /// The system's pill reaches this far above and below its indicators.
     static let verticalReach: CGFloat = 5.25
 

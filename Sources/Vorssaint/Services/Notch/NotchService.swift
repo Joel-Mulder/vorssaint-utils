@@ -1048,11 +1048,28 @@ final class NotchService: ObservableObject {
         refreshPresentation()
     }
 
-    /// The tap zone around the system's pill, while it shows and the island is closed.
+    /// The tap zone around the system's pill, while it shows and the island
+    /// is closed, and lit for a moment after its size changes. Without the
+    /// system's pill, a lit zone is drawn around where its microphone pill
+    /// would be, so it can be sized at any time.
     private func updateTapZone() {
-        guard running, !expanded, geometry.cameraIsPill, let pill = systemPill, let panel,
-              let screen = NSScreen.screens.first?.frame else { tapZone.hide(); return }
         let zone = NotchPillTapZone.current()
+        if zone != lastTapZoneSize {
+            if lastTapZoneSize != nil { tapZoneLitUntil = Date().addingTimeInterval(NotchTapZonePanel.litDuration) }
+            lastTapZoneSize = zone
+            DispatchQueue.main.asyncAfter(deadline: .now() + NotchTapZonePanel.litDuration + 0.05) { [weak self] in
+                self?.updateTapZone()
+            }
+        }
+        let lit = (tapZoneLitUntil ?? .distantPast) > Date()
+        let camera = geometry.physicalCamera
+        let shown = systemPill ?? (lit ? camera.map {
+            CGRect(x: $0.midX - NotchSystemIsland.typicalLeft, y: NotchSystemIsland.typicalTop,
+                   width: NotchSystemIsland.typicalWidth, height: NotchSystemIsland.typicalHeight)
+        } : nil)
+        guard running, !expanded, geometry.cameraIsPill, let pill = shown, let panel,
+              let screen = NSScreen.screens.first?.frame else { tapZone.hide(); return }
+        tapZone.lit = lit
         // The window list counts from the top of the primary display.
         let flipped = CGRect(x: pill.minX, y: screen.maxY - pill.maxY, width: pill.width, height: pill.height)
         var area = flipped.insetBy(dx: -zone.width, dy: -zone.height)
@@ -1061,6 +1078,8 @@ final class NotchService: ObservableObject {
         lastTapZone = area
     }
     private var lastTapZone: CGRect?
+    private var lastTapZoneSize: NotchPillTapZone?
+    private var tapZoneLitUntil: Date?
 
     private var baseSurfaceSize: CGSize {
         if let capsule = capsuleSurfaceSize { return capsule }

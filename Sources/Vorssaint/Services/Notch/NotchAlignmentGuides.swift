@@ -106,6 +106,12 @@ final class NotchTapZonePanel {
     private var panel: NSPanel?
     private let view = ZoneView()
     var isShown: Bool { panel?.isVisible == true }
+    /// How long the zone stays lit after its size changes.
+    static let litDuration: TimeInterval = 3
+    /// Lit, the zone shows where it is; otherwise it is too faint to see.
+    var lit = false {
+        didSet { if lit != oldValue { view.lit = lit; view.needsDisplay = true } }
+    }
 
     func show(_ area: CGRect, level: NSWindow.Level, below window: Int, action: @escaping () -> Void) {
         let panel = self.panel ?? makePanel()
@@ -136,11 +142,21 @@ final class NotchTapZonePanel {
 
     private final class ZoneView: NSView {
         var action: (() -> Void)?
+        var lit = false
         override var isOpaque: Bool { false }
         override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
         override func draw(_ dirtyRect: NSRect) {
-            NSColor.black.withAlphaComponent(0.01).setFill()
+            guard lit else {
+                NSColor.black.withAlphaComponent(0.01).setFill()
+                bounds.fill()
+                return
+            }
+            NSColor.systemYellow.withAlphaComponent(0.35).setFill()
             bounds.fill()
+            NSColor.systemYellow.setStroke()
+            let edge = NSBezierPath(rect: bounds.insetBy(dx: 1, dy: 1))
+            edge.lineWidth = 2
+            edge.stroke()
         }
         override func mouseUp(with event: NSEvent) { action?() }
     }
