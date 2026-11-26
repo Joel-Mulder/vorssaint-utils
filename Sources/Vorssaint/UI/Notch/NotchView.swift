@@ -783,7 +783,7 @@ struct NotchShape: Shape {
 
     /// The island's outline at a surface of `height`, as its display draws it.
     static func island(height: CGFloat, geometry: NotchGeometry) -> NotchShape {
-        NotchShape(attached: true, radius: NotchLayout.surfaceRadius(height: height), floatingGap: geometry.floatingGap)
+        NotchShape(attached: true, radius: NotchLayout.surfaceRadius(height: height), floatingGap: geometry.silhouetteGap)
     }
 
     func path(in rect: CGRect) -> Path {

@@ -972,7 +972,34 @@ final class NotchService: ObservableObject {
             capturesAudio: captureControls?.selectedTool.capturesAudio == true)
     }
 
+    /// How wide the closed island must be to reach past macOS's own pill
+    /// around a pill camera, or zero while the system shows none.
+    private var systemIslandClearance: CGFloat = 0
+    private var systemIslandTimer: Timer?
+
+    /// The closed island reaches past the system's pill, which takes every
+    /// click on it, so the island can still be opened while it shows.
     var surfaceSize: CGSize {
+        var size = baseSurfaceSize
+        if !expanded, geometry.cameraIsPill, systemIslandClearance > size.width {
+            size.width = min(systemIslandClearance, geometry.screen.width - 24)
+        }
+        return size
+    }
+
+    private func readSystemIsland() {
+        guard running, geometry.cameraIsPill, let camera = geometry.physicalCamera else {
+            if systemIslandClearance != 0 { systemIslandClearance = 0; refreshPresentation() }
+            return
+        }
+        let clearance = NotchSystemIsland.clearance(
+            cameraMidX: camera.midX, indicators: NotchSystemIsland.indicators(nearCameraAt: camera.midX))
+        guard clearance != systemIslandClearance else { return }
+        systemIslandClearance = clearance
+        refreshPresentation()
+    }
+
+    private var baseSurfaceSize: CGSize {
         if let capsule = capsuleSurfaceSize { return capsule }
         if fullscreenCompact { return geometry.bareCutout }
         if captureControls != nil {
@@ -3702,7 +3729,8 @@ final class NotchService: ObservableObject {
                              capsuleFit: NotchCapsuleFit.current(),
                              hideMenuBarGap: UserDefaults.standard.bool(forKey: DefaultsKey.notchHideMenuBarGap),
                              outline: UserDefaults.standard.bool(forKey: DefaultsKey.notchOutlineEnabled),
-                             barEdge: 1 / max(1, screen.backingScaleFactor))
+                             barEdge: 1 / max(1, screen.backingScaleFactor),
+                             cameraShape: NotchCameraShape.current())
     }
 
     private func updateFullscreenVisibility(displayID: CGDirectDisplayID) {
@@ -3790,6 +3818,13 @@ final class NotchService: ObservableObject {
     }
 
     private func installObservers() {
+        // One window list read a second, and only on a display with a pill camera.
+        if systemIslandTimer == nil {
+            let timer = Timer(timeInterval: 1, repeats: true) { [weak self] _ in self?.readSystemIsland() }
+            timer.tolerance = 0.3
+            systemIslandTimer = timer
+            RunLoop.main.add(timer, forMode: .common)
+        }
         observe(.default, NSMenu.didBeginTrackingNotification) { [weak self] in
             guard let self else { return }
             self.activityPickerMenuOpen = self.showsCompactActivityPicker

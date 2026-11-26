@@ -122,6 +122,82 @@ enum NotchSilhouette: String, CaseIterable {
     }
 }
 
+/// The shape of a physical camera cutout. The notched MacBook Pros hang a
+/// wide notch from the top edge; the OLED MacBook Pros put the camera in a
+/// pill that floats below the top edge, as a phone's Dynamic Island does.
+/// macOS reports both the same way, as a band of the menu bar with a gap
+/// between `auxiliaryTopLeftArea` and `auxiliaryTopRightArea`, so the shape
+/// is told apart by that gap's proportions: a notch is several times wider
+/// than it is tall, a pill is not. `notchCameraShape` overrides the guess.
+enum NotchCameraShape: String, CaseIterable {
+    case automatic, notch, pill
+
+    static func current(in defaults: UserDefaults = .standard) -> NotchCameraShape {
+        NotchCameraShape(rawValue: defaults.string(forKey: DefaultsKey.notchCameraShape) ?? "") ?? .automatic
+    }
+
+    /// Whether a camera region `width` wide and `height` tall is a floating pill.
+    func isPill(width: CGFloat, height: CGFloat) -> Bool {
+        switch self {
+        case .notch: return false
+        case .pill: return true
+        case .automatic:
+            guard width.isFinite, height.isFinite, width > 0, height > 0 else { return false }
+            return width < height * 3
+        }
+    }
+
+    /// How far below the top edge the pill starts, as a share of the band
+    /// macOS reports for it. Measured on a 14-inch OLED MacBook Pro, where
+    /// the system's own island runs from 7.5 to 47.5 points of a 47.5-point
+    /// band; the share keeps that across scaled resolutions.
+    static let pillTopShare: CGFloat = 7.5 / 47.5
+    /// The system's island ends this far above the band's bottom edge, so
+    /// a surface that reaches the whole band shows a sliver below it.
+    static let pillBottomGap: CGFloat = 0.5
+}
+
+/// macOS's own island on a display whose camera is a pill. While the
+/// microphone, camera or screen is in use, the system grows a black pill
+/// around the camera with its privacy indicators, drawn above every app and
+/// taking every click on it. It is not ours to hide; the island instead
+/// reaches past it on both sides so that something of it can still be clicked.
+/// The system draws only the indicators as windows, so the pill's extent is
+/// measured from them: on a 14-inch OLED MacBook Pro the microphone's pill
+/// starts 102.5 points left of its indicator and ends 25.5 points right of it.
+enum NotchSystemIsland {
+    static let leadingReach: CGFloat = 102.5
+    static let trailingReach: CGFloat = 25.5
+    /// What the island shows on each side of the system's pill: room for a click.
+    static let wing: CGFloat = 30
+
+    /// The privacy indicators on screen near a camera centred at `cameraMidX`,
+    /// in global coordinates with the origin at the top left.
+    static func indicators(nearCameraAt cameraMidX: CGFloat) -> [CGRect] {
+        guard let list = CGWindowListCopyWindowInfo([.optionOnScreenOnly], kCGNullWindowID) as? [[String: Any]]
+        else { return [] }
+        return list.compactMap { info in
+            guard info[kCGWindowOwnerName as String] as? String == "Window Server",
+                  info[kCGWindowName as String] as? String == "StatusIndicator",
+                  let bounds = info[kCGWindowBounds as String] as? [String: CGFloat],
+                  let rect = CGRect(dictionaryRepresentation: bounds as CFDictionary),
+                  abs(rect.midX - cameraMidX) < 300
+            else { return nil }
+            return rect
+        }
+    }
+
+    /// The width an island centred on the camera needs to show past the
+    /// system's pill on both sides, or zero when the system shows none.
+    static func clearance(cameraMidX: CGFloat, indicators: [CGRect]) -> CGFloat {
+        guard let first = indicators.first else { return 0 }
+        let span = indicators.dropFirst().reduce(first) { $0.union($1) }
+        let left = span.minX - leadingReach, right = span.maxX + trailingReach
+        let half = max(cameraMidX - left, right - cameraMidX)
+        return ((half + wing) * 2).rounded(.up)
+    }
+}
+
 enum NotchSize: String, CaseIterable {
     case compact, spacious, custom
 
@@ -2251,8 +2327,17 @@ struct NotchGeometry: Equatable {
     /// Nil hangs the island from the top edge. A capsule floats this far
     /// inside the menu bar, above and below its strips.
     let floatingGap: CGFloat?
-    /// How far a fitted capsule sits below the top of the display, open or closed.
+    /// How far a fitted capsule sits below the top of the display, open or
+    /// closed, or how far a floating camera pill sits below it.
     let floatingDrop: CGFloat
+    /// The camera is a pill floating below the top edge, not a notch hanging
+    /// from it. The island keeps a notch's layout, its content on either side
+    /// of the camera, but is drawn as a rounded surface wrapping the pill.
+    let cameraIsPill: Bool
+    /// What the silhouette is drawn with: a capsule's own gap, none for a
+    /// pill, which is rounded all round inside its surface, or nil to hang
+    /// from the top edge.
+    var silhouetteGap: CGFloat? { floatingGap ?? (cameraIsPill ? 0 : nil) }
     /// How far past a physical camera an outlined island reaches on each side
     /// and below. The line is drawn inside the island's edge, so an island
     /// that only covers the camera would hide it behind the housing.
@@ -2282,15 +2367,21 @@ struct NotchGeometry: Equatable {
          menuBarHeight: CGFloat = 24, compactSideRoom: CGFloat? = nil,
          customWidth: Double = NotchSize.defaultWidth, customHeight: Double = NotchSize.defaultHeight,
          cameraFit: NotchCameraFit = .zero, silhouette: NotchSilhouette = .notch, capsuleFit: NotchCapsuleFit = .zero,
-         hideMenuBarGap: Bool = false, outline: Bool = false, barEdge: CGFloat = 0) {
+         hideMenuBarGap: Bool = false, outline: Bool = false, barEdge: CGFloat = 0,
+         cameraShape: NotchCameraShape = .notch) {
         self.screen = screen
         self.layout = layout
         self.customWidth = NotchSize.clamped(customWidth, to: NotchSize.widthRange, fallback: NotchSize.defaultWidth)
         self.customHeight = NotchSize.clamped(customHeight, to: NotchSize.heightRange, fallback: NotchSize.defaultHeight)
         let barHeight = menuBarHeight.isFinite ? min(64, max(16, menuBarHeight)) : 24
         isNotched = safeAreaTop.isFinite && safeAreaTop > 0 && cameraWidth.isFinite && cameraWidth > 0
+        let pill = isNotched && cameraShape.isPill(width: cameraWidth, height: safeAreaTop)
+        cameraIsPill = pill
+        // A pill starts below the top edge, on half points: whole pixels.
+        let pillTop = pill ? (safeAreaTop * NotchCameraShape.pillTopShare * 2).rounded() / 2 : 0
         physicalCamera = isNotched ? CGRect(x: physicalCameraX ?? (screen.midX - cameraWidth / 2),
-                                           y: screen.maxY - safeAreaTop, width: cameraWidth, height: safeAreaTop) : nil
+                                           y: screen.maxY - safeAreaTop, width: cameraWidth,
+                                           height: safeAreaTop - pillTop - (pill ? NotchCameraShape.pillBottomGap : 0)) : nil
         // Only a physical camera has an outline to match; a simulated one follows the bar.
         let fit = isNotched ? cameraFit : .zero
         // A capsule replaces only a simulated cutout. It is as wide as the
@@ -2300,7 +2391,7 @@ struct NotchGeometry: Equatable {
         floatingGap = gap
         // A fitted capsule grows from its top edge, keeping its margins.
         let capsuleFit = gap == nil ? NotchCapsuleFit.zero : capsuleFit
-        floatingDrop = capsuleFit.drop
+        floatingDrop = pill ? pillTop : capsuleFit.drop
         capsuleWidthFit = capsuleFit.width
         // The bar ends in a hairline, `barEdge` thick, that reads as its edge:
         // the capsule's margin below is measured from it, as the one above is
@@ -2322,7 +2413,9 @@ struct NotchGeometry: Equatable {
         if isNotched {
             // The menu bar can extend slightly below the camera's safe area.
             // Optionally cover its full height before applying a manual fit.
-            let baseHeight = hideMenuBarGap ? max(safeAreaTop, barHeight) : safeAreaTop
+            // A pill floats inside the bar, so there is no strip below it to hide.
+            let baseHeight = pill ? safeAreaTop - pillTop - NotchCameraShape.pillBottomGap
+                : hideMenuBarGap ? max(safeAreaTop, barHeight) : safeAreaTop
             cameraHeight = min(max(0, baseHeight + fit.height + room), 64)
         } else {
             cameraHeight = stripHeight
@@ -2337,6 +2430,7 @@ struct NotchGeometry: Equatable {
     func hasSameMenuBar(as other: NotchGeometry) -> Bool {
         screen == other.screen && cameraWidth == other.cameraWidth && physicalCamera == other.physicalCamera
             && menuBarHeight == other.menuBarHeight && isNotched == other.isNotched
+            && cameraIsPill == other.cameraIsPill
     }
 
     /// Below a camera, or below the space it would take. A capsule has

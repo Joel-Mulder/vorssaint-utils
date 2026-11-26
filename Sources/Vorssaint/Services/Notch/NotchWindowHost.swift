@@ -92,7 +92,7 @@ final class NotchWindowHost: NSObject, CAAnimationDelegate {
             guard let self else { return nil }
             return self.currentGeometry.screen.midX - self.panel.frame.minX - self.canvas.convert(CGPoint.zero, to: nil).x
         }
-        canvas.setFloatingGap(geometry.floatingGap)
+        canvas.setFloatingGap(geometry.silhouetteGap)
         canvas.layoutSubtreeIfNeeded()
         appliedFrame = panel.frame
         overlaySpace?.add(panel)
@@ -261,7 +261,7 @@ final class NotchWindowHost: NSObject, CAAnimationDelegate {
                  hideWhenSettled: Bool = false, usesGlass: Bool = false, steady: Bool = false) {
         // Choosing the capsule or the notch redraws the island at once, even
         // at a size it already has.
-        canvas.setFloatingGap(geometry.floatingGap)
+        canvas.setFloatingGap(geometry.silhouetteGap)
         hidesWhenSettled = hideWhenSettled
         if relocationHidden { panel.holdsWave = !hideWhenSettled }
         if hideWhenSettled {
@@ -335,7 +335,7 @@ final class NotchWindowHost: NSObject, CAAnimationDelegate {
         // reveal at the screen edge, even when reopening at that same size.
         let previousWidth = revealing ? geometry.collapsed.width : canvas.bounds.width
         let previousPath = revealing
-            ? NotchShape(attached: true, radius: 0, floatingGap: geometry.floatingGap)
+            ? NotchShape(attached: true, radius: 0, floatingGap: geometry.silhouetteGap)
                 .path(in: CGRect(x: 0, y: 0, width: previousWidth, height: 0)).cgPath
             : canvas.visiblePath
         let sameScreen = geometry.screen == currentGeometry.screen
