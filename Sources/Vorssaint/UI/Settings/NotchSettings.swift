@@ -90,6 +90,17 @@ struct NotchSettings: View {
     @AppStorage(DefaultsKey.notchPillOffset) private var pillOffset = 0.0
     @AppStorage(DefaultsKey.notchPillOffsetX) private var pillOffsetX = 0.0
     @AppStorage(DefaultsKey.notchAlignmentGuides) private var alignmentGuides = false
+    @AppStorage(DefaultsKey.notchPillActiveStyle) private var pillActiveStyle = NotchPillActiveStyle.bubble.rawValue
+    @AppStorage(DefaultsKey.notchPillBehindFitWidth) private var behindFitWidth = 0.0
+    @AppStorage(DefaultsKey.notchPillBehindFitHeight) private var behindFitHeight = 0.0
+    @AppStorage(DefaultsKey.notchPillBehindOffset) private var behindOffset = 0.0
+    @AppStorage(DefaultsKey.notchPillBehindOffsetX) private var behindOffsetX = 0.0
+    @AppStorage(DefaultsKey.notchPillBubbleFitWidth) private var bubbleFitWidth = 0.0
+    @AppStorage(DefaultsKey.notchPillBubbleFitHeight) private var bubbleFitHeight = 0.0
+    @AppStorage(DefaultsKey.notchPillBubbleOffset) private var bubbleOffset = 0.0
+    @AppStorage(DefaultsKey.notchPillBubbleOffsetX) private var bubbleOffsetX = 0.0
+    @AppStorage(DefaultsKey.notchPillTapZoneWidth) private var tapZoneWidth = 24.0
+    @AppStorage(DefaultsKey.notchPillTapZoneHeight) private var tapZoneHeight = 6.0
     @AppStorage(DefaultsKey.notchCapsuleFitWidth) private var capsuleFitWidth = 0.0
     @AppStorage(DefaultsKey.notchCapsuleFitHeight) private var capsuleFitHeight = 0.0
     @AppStorage(DefaultsKey.notchCapsuleFitDrop) private var capsuleFitDrop = 0.0
@@ -127,7 +138,10 @@ struct NotchSettings: View {
          String(timerEnabled), String(timerSoundEnabled), String(hideTimerCountdown),
          String(cameraEnabled), String(accessoriesEnabled), String(outlineEnabled), String(hideMenuBarGap),
          String(customWidth), String(customHeight), String(cameraFitWidth), String(cameraFitHeight),
-         String(pillOffset), String(pillOffsetX), String(alignmentGuides),
+         String(pillOffset), String(pillOffsetX), String(alignmentGuides), pillActiveStyle,
+         String(behindFitWidth), String(behindFitHeight), String(behindOffset), String(behindOffsetX),
+         String(bubbleFitWidth), String(bubbleFitHeight), String(bubbleOffset), String(bubbleOffsetX),
+         String(tapZoneWidth), String(tapZoneHeight),
          String(capsuleFitWidth), String(capsuleFitHeight), String(capsuleFitDrop), String(hapticFeedback),
          String(shelfWindow), String(dragReveal), String(captureControls), String(quickPanel), String(appPanel),
          String(hoverExpand), String(hideUntilHover), String(hiddenShowsActivity), String(hideInFullscreen),
@@ -290,7 +304,7 @@ struct NotchSettings: View {
             }
             // Only a physical camera has an outline to match.
             if NotchSupport.hasNotchedDisplay {
-                SettingsCard(title: text.cameraFit) {
+                SettingsCard(title: NotchSupport.hasPillCameraDisplay ? "\(text.cameraFit): \(text.pillBare)" : text.cameraFit) {
                     switchRow("rectangle.topthird.inset.filled", text.hideMenuBarGap,
                               caption: text.hideMenuBarGapHint, isOn: $hideMenuBarGap)
                     Grid(alignment: .leading, horizontalSpacing: 12, verticalSpacing: 10) {
@@ -312,6 +326,7 @@ struct NotchSettings: View {
                         switchRow("ruler", text.alignmentGuides, isOn: $alignmentGuides)
                     }
                 }
+                if NotchSupport.hasPillCameraDisplay { pillActiveFitCards }
             }
         }
     }
@@ -1032,6 +1047,39 @@ struct NotchSettings: View {
     }
 
     /// A correction around zero, signed so the untouched value reads as none.
+    /// The fits for while macOS shows its own pill: behind it or a bubble
+    /// beside it, each tuned apart from the bare pill, and the tap zone
+    /// around the system's pill that opens the island.
+    @ViewBuilder private var pillActiveFitCards: some View {
+        let bubble = (NotchPillActiveStyle(rawValue: pillActiveStyle) ?? .bubble) == .bubble
+        let card = bubble ? text.pillBubble : text.pillBehind
+        SettingsCard(title: text.pillWhileShown) {
+            Picker(text.pillWhileShown, selection: $pillActiveStyle) {
+                Text(text.pillBehind).tag(NotchPillActiveStyle.behind.rawValue)
+                Text(text.pillBubble).tag(NotchPillActiveStyle.bubble.rawValue)
+            }
+            .pickerStyle(.segmented).labelsHidden()
+            Grid(alignment: .leading, horizontalSpacing: 12, verticalSpacing: 10) {
+                fitSlider(text.width, card: card, value: bubble ? $bubbleFitWidth : $behindFitWidth,
+                          range: NotchCameraFit.widthRange, step: 1)
+                fitSlider(text.height, card: card, value: bubble ? $bubbleFitHeight : $behindFitHeight,
+                          range: NotchCameraFit.heightRange, step: 0.5)
+                fitSlider(text.upDown, card: card, value: bubble ? $bubbleOffset : $behindOffset,
+                          range: NotchCameraShape.offsetRange, step: 0.5)
+                fitSlider(text.leftRight, card: card, value: bubble ? $bubbleOffsetX : $behindOffsetX,
+                          range: NotchCameraShape.offsetRange, step: 0.5)
+            }
+        }
+        SettingsCard(title: text.pillTapZone) {
+            Grid(alignment: .leading, horizontalSpacing: 12, verticalSpacing: 10) {
+                fitSlider(text.width, card: text.pillTapZone, value: $tapZoneWidth,
+                          range: NotchPillTapZone.widthRange, step: 1)
+                fitSlider(text.height, card: text.pillTapZone, value: $tapZoneHeight,
+                          range: NotchPillTapZone.heightRange, step: 1)
+            }
+        }
+    }
+
     private func fitSlider(_ title: String, card: String, value: Binding<Double>, range: ClosedRange<Double>,
                            step: Double) -> some View {
         let bounded = Binding(get: { NotchSize.clamped(value.wrappedValue, to: range, fallback: 0) },

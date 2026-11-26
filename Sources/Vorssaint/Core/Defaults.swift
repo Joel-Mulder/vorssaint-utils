@@ -962,6 +962,17 @@ enum DefaultsKey {
     static let notchPillOffset = "notchPillOffset"
     static let notchPillOffsetX = "notchPillOffsetX"
     static let notchAlignmentGuides = "notchAlignmentGuides"
+    static let notchPillActiveStyle = "notchPillActiveStyle"
+    static let notchPillBehindFitWidth = "notchPillBehindFitWidth"
+    static let notchPillBehindFitHeight = "notchPillBehindFitHeight"
+    static let notchPillBehindOffset = "notchPillBehindOffset"
+    static let notchPillBehindOffsetX = "notchPillBehindOffsetX"
+    static let notchPillBubbleFitWidth = "notchPillBubbleFitWidth"
+    static let notchPillBubbleFitHeight = "notchPillBubbleFitHeight"
+    static let notchPillBubbleOffset = "notchPillBubbleOffset"
+    static let notchPillBubbleOffsetX = "notchPillBubbleOffsetX"
+    static let notchPillTapZoneWidth = "notchPillTapZoneWidth"
+    static let notchPillTapZoneHeight = "notchPillTapZoneHeight"
     // The capsule's size and place, fitted by hand on such a display.
     static let notchCapsuleFitWidth = "notchCapsuleFitWidth"
     static let notchCapsuleFitHeight = "notchCapsuleFitHeight"
@@ -1585,6 +1596,17 @@ enum Defaults {
         DefaultsKey.notchPillOffset: 0.0,
         DefaultsKey.notchPillOffsetX: 0.0,
         DefaultsKey.notchAlignmentGuides: false,
+        DefaultsKey.notchPillActiveStyle: NotchPillActiveStyle.bubble.rawValue,
+        DefaultsKey.notchPillBehindFitWidth: 0.0,
+        DefaultsKey.notchPillBehindFitHeight: 0.0,
+        DefaultsKey.notchPillBehindOffset: 0.0,
+        DefaultsKey.notchPillBehindOffsetX: 0.0,
+        DefaultsKey.notchPillBubbleFitWidth: 0.0,
+        DefaultsKey.notchPillBubbleFitHeight: 0.0,
+        DefaultsKey.notchPillBubbleOffset: 0.0,
+        DefaultsKey.notchPillBubbleOffsetX: 0.0,
+        DefaultsKey.notchPillTapZoneWidth: 24.0,
+        DefaultsKey.notchPillTapZoneHeight: 6.0,
         DefaultsKey.notchCapsuleFitWidth: 0.0,
         DefaultsKey.notchCapsuleFitHeight: 0.0,
         DefaultsKey.notchCapsuleFitDrop: 0.0,

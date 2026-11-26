@@ -186,6 +186,17 @@ enum NotchCameraShape: String, CaseIterable {
 enum NotchSystemIsland {
     static let leadingReach: CGFloat = 102.5
     static let trailingReach: CGFloat = 25.5
+    /// The system's pill reaches this far above and below its indicators.
+    static let verticalReach: CGFloat = 5.25
+
+    /// The system's pill, estimated from its indicators, in global points
+    /// with the origin at the top left, as the window list gives them.
+    static func pill(around indicators: [CGRect]) -> CGRect? {
+        guard let first = indicators.first else { return nil }
+        let span = indicators.dropFirst().reduce(first) { $0.union($1) }
+        return CGRect(x: span.minX - leadingReach, y: span.minY - verticalReach,
+                      width: span.width + leadingReach + trailingReach, height: span.height + verticalReach * 2)
+    }
     /// What the island shows on each side of the system's pill: room for a click.
     static let wing: CGFloat = 30
     /// Between the system's pill and the bubble the closed island becomes beside it.
@@ -221,6 +232,70 @@ enum NotchSystemIsland {
     /// wider side reaches, or zero when the system shows none.
     static func pillWidth(clearance: CGFloat) -> CGFloat {
         clearance > 0 ? clearance - wing * 2 : 0
+    }
+}
+
+/// What a pill camera's island is fitted for: nothing from macOS around the
+/// camera, or the system's own pill showing something, with the island either
+/// behind it or as a bubble beside it. Each has its own fit, tuned by eye.
+enum NotchPillState: Equatable {
+    case bare, behind, bubble
+}
+
+/// Where the closed island goes while the system shows its pill.
+enum NotchPillActiveStyle: String, CaseIterable {
+    case behind, bubble
+
+    static func current(in defaults: UserDefaults = .standard) -> NotchPillActiveStyle {
+        NotchPillActiveStyle(rawValue: defaults.string(forKey: DefaultsKey.notchPillActiveStyle) ?? "") ?? .bubble
+    }
+}
+
+/// One state's fit: the camera fit's width and height, and how far the pill
+/// moves down and right. The bare pill keeps the camera fit's own keys.
+struct NotchPillFit: Equatable {
+    let camera: NotchCameraFit
+    let offset: CGFloat
+    let offsetX: CGFloat
+
+    struct Keys { let width, height, offset, offsetX: String }
+
+    static func keys(for state: NotchPillState) -> Keys {
+        switch state {
+        case .bare: return Keys(width: DefaultsKey.notchCameraFitWidth, height: DefaultsKey.notchCameraFitHeight,
+                                offset: DefaultsKey.notchPillOffset, offsetX: DefaultsKey.notchPillOffsetX)
+        case .behind: return Keys(width: DefaultsKey.notchPillBehindFitWidth, height: DefaultsKey.notchPillBehindFitHeight,
+                                  offset: DefaultsKey.notchPillBehindOffset, offsetX: DefaultsKey.notchPillBehindOffsetX)
+        case .bubble: return Keys(width: DefaultsKey.notchPillBubbleFitWidth, height: DefaultsKey.notchPillBubbleFitHeight,
+                                  offset: DefaultsKey.notchPillBubbleOffset, offsetX: DefaultsKey.notchPillBubbleOffsetX)
+        }
+    }
+
+    static func current(for state: NotchPillState, in defaults: UserDefaults = .standard) -> NotchPillFit {
+        let keys = keys(for: state)
+        func half(_ key: String) -> CGFloat {
+            (NotchSize.clamped(defaults.double(forKey: key), to: NotchCameraShape.offsetRange, fallback: 0) * 2)
+                .rounded() / 2
+        }
+        return NotchPillFit(camera: NotchCameraFit(width: defaults.double(forKey: keys.width),
+                                                   height: defaults.double(forKey: keys.height)),
+                            offset: half(keys.offset), offsetX: half(keys.offsetX))
+    }
+}
+
+/// The area around the system's pill that opens the island, since the pill
+/// itself takes every click on it: how far it reaches past each side and
+/// past the top and bottom.
+struct NotchPillTapZone: Equatable {
+    static let widthRange = 0.0...80.0
+    static let heightRange = 0.0...20.0
+    let width: CGFloat
+    let height: CGFloat
+
+    static func current(in defaults: UserDefaults = .standard) -> NotchPillTapZone {
+        NotchPillTapZone(
+            width: NotchSize.clamped(defaults.double(forKey: DefaultsKey.notchPillTapZoneWidth), to: widthRange, fallback: 24).rounded(),
+            height: NotchSize.clamped(defaults.double(forKey: DefaultsKey.notchPillTapZoneHeight), to: heightRange, fallback: 6).rounded())
     }
 }
 

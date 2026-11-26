@@ -24,13 +24,14 @@ final class NotchAlignmentGuides {
 
     /// Shows guides around `pills`, in global points with the origin at the
     /// bottom left, on `screen`; no pills hides them.
-    func show(_ pills: [CGRect], on screen: CGRect, above level: NSWindow.Level) {
+    func show(_ pills: [CGRect], zone: CGRect? = nil, on screen: CGRect, above level: NSWindow.Level) {
         guard !pills.isEmpty else { hide(); return }
         let frame = CGRect(x: screen.minX, y: screen.maxY - Self.depth, width: screen.width, height: Self.depth)
         let panel = self.panel ?? makePanel()
         panel.level = NSWindow.Level(rawValue: level.rawValue + 1)
         if panel.frame != frame { panel.setFrame(frame, display: false) }
         view.pills = pills.map { $0.offsetBy(dx: -frame.minX, dy: -frame.minY) }
+        view.zone = zone?.offsetBy(dx: -frame.minX, dy: -frame.minY)
         view.needsDisplay = true
         panel.orderFrontRegardless()
     }
@@ -56,10 +57,19 @@ final class NotchAlignmentGuides {
 
     private final class GuidesView: NSView {
         var pills: [CGRect] = []
+        var zone: CGRect?
         override var isOpaque: Bool { false }
 
         override func draw(_ dirtyRect: NSRect) {
             let red = NSColor.systemRed
+            // The tap zone, dashed, so it reads apart from the pill's own lines.
+            if let zone {
+                let path = NSBezierPath(rect: zone.insetBy(dx: 0.5, dy: 0.5))
+                path.lineWidth = 1
+                path.setLineDash([4, 3], count: 2, phase: 0)
+                NSColor.systemYellow.setStroke()
+                path.stroke()
+            }
             for pill in pills {
                 // Lines first, so the outline stays clear where they meet it.
                 red.withAlphaComponent(0.7).setStroke()
@@ -85,5 +95,53 @@ final class NotchAlignmentGuides {
                 outline.stroke()
             }
         }
+    }
+}
+
+/// An invisible area around the system's pill that opens the island, since
+/// the pill takes every click on it. It sits just below the island's own
+/// window, so the island and the system's pill keep their clicks, and it is
+/// drawn too faintly to see, which the window server needs to send it clicks.
+final class NotchTapZonePanel {
+    private var panel: NSPanel?
+    private let view = ZoneView()
+    var isShown: Bool { panel?.isVisible == true }
+
+    func show(_ area: CGRect, level: NSWindow.Level, below window: Int, action: @escaping () -> Void) {
+        let panel = self.panel ?? makePanel()
+        view.action = action
+        panel.level = level
+        if panel.frame != area { panel.setFrame(area, display: true) }
+        panel.order(.below, relativeTo: window)
+    }
+
+    func hide() {
+        panel?.orderOut(nil)
+    }
+
+    private func makePanel() -> NSPanel {
+        let panel = NSPanel(contentRect: .zero, styleMask: [.borderless, .nonactivatingPanel],
+                            backing: .buffered, defer: false)
+        panel.isOpaque = false
+        panel.backgroundColor = .clear
+        panel.hasShadow = false
+        panel.isReleasedWhenClosed = false
+        panel.becomesKeyOnlyIfNeeded = true
+        panel.collectionBehavior = [.canJoinAllSpaces, .stationary, .ignoresCycle, .fullScreenAuxiliary]
+        panel.sharingType = .none
+        panel.contentView = view
+        self.panel = panel
+        return panel
+    }
+
+    private final class ZoneView: NSView {
+        var action: (() -> Void)?
+        override var isOpaque: Bool { false }
+        override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
+        override func draw(_ dirtyRect: NSRect) {
+            NSColor.black.withAlphaComponent(0.01).setFill()
+            bounds.fill()
+        }
+        override func mouseUp(with event: NSEvent) { action?() }
     }
 }

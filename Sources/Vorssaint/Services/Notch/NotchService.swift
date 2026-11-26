@@ -981,53 +981,86 @@ final class NotchService: ObservableObject {
     /// The closed island's outline and the lines from its edges, while the
     /// guides are on; open, the island has nothing to line up.
     private func updateAlignmentGuides() {
+        updateTapZone()
         guard running, NotchAlignmentGuides.isEnabled(), !expanded, let panel,
               let rect = windowHost?.islandScreenRect else { alignmentGuides.hide(); return }
-        alignmentGuides.show([rect], on: geometry.screen, above: panel.level)
+        let zone = tapZone.isShown ? lastTapZone : nil
+        alignmentGuides.show([rect], zone: zone, on: geometry.screen, above: panel.level)
     }
 
-    /// Where macOS's own pill starts, in global points, while it shows one.
-    private var systemIslandMinX: CGFloat?
+    /// macOS's own pill while it shows one, estimated from its indicators,
+    /// in global points with the origin at the top left.
+    private var systemPill: CGRect?
+    private var systemIslandMinX: CGFloat? { systemPill?.minX }
+    private let tapZone = NotchTapZonePanel()
 
-    /// While the system shows its pill, the closed island steps aside as a
-    /// round bubble just left of it, as a phone shows a second activity: a
-    /// strip reaching past the pill would show as a second island around it,
-    /// as the system outlines its own. What drops below the strip, such as a
-    /// notification's preview, stays where it is.
-    var showsSystemIslandBubble: Bool {
-        guard !expanded, geometry.cameraIsPill, systemIslandMinX != nil else { return false }
+    /// Which of a pill camera's fits the island takes now.
+    var pillState: NotchPillState {
+        guard systemPill != nil else { return .bare }
+        return NotchPillActiveStyle.current() == .bubble ? .bubble : .behind
+    }
+
+    /// While the system shows its pill, the closed island either waits behind
+    /// it or steps aside as a round bubble just left of it, as a phone shows a
+    /// second activity, each with its own fit. What drops below the strip,
+    /// such as a notification's preview, stays where it is.
+    private var closedBesideSystemIsland: Bool {
+        guard !expanded, geometry.cameraIsPill, systemPill != nil else { return false }
         return baseSurfaceSize.height <= geometry.stripHeight + 6
     }
 
-    /// The bubble's surface: a circle as tall as the strip, with the
-    /// silhouette's shoulders on both sides of it.
+    var showsSystemIslandBubble: Bool { closedBesideSystemIsland && pillState == .bubble }
+
+    /// The bubble's surface: a circle as tall as its fitted strip, widened
+    /// by its fit's width, with the silhouette's shoulders on both sides.
     private var systemIslandBubbleSize: CGSize {
         let height = geometry.stripHeight
-        return CGSize(width: (height + NotchLayout.shoulder(height: height) * 2).rounded(.up), height: height)
+        let body = max(8, height + NotchPillFit.current(for: .bubble).camera.width)
+        return CGSize(width: (body + NotchLayout.shoulder(height: height) * 2).rounded(.up), height: height)
     }
 
     var surfaceSize: CGSize {
-        showsSystemIslandBubble ? systemIslandBubbleSize : baseSurfaceSize
+        guard closedBesideSystemIsland else { return baseSurfaceSize }
+        return pillState == .bubble ? systemIslandBubbleSize : geometry.restingSize(showsContent: false)
     }
 
     private func readSystemIsland() {
         guard running, geometry.cameraIsPill, let camera = geometry.physicalCamera else {
-            if systemIslandClearance != 0 {
+            if systemPill != nil {
+                systemPill = nil
                 systemIslandClearance = 0
-                systemIslandMinX = nil
                 geometry.systemIslandWidth = 0
-                refreshPresentation()
+                systemIslandDidChange()
             }
             return
         }
         let indicators = NotchSystemIsland.indicators(nearCameraAt: camera.midX)
-        let clearance = NotchSystemIsland.clearance(cameraMidX: camera.midX, indicators: indicators)
-        guard clearance != systemIslandClearance else { return }
-        systemIslandClearance = clearance
-        systemIslandMinX = indicators.map(\.minX).min().map { $0 - NotchSystemIsland.leadingReach }
-        geometry.systemIslandWidth = NotchSystemIsland.pillWidth(clearance: clearance)
+        let pill = NotchSystemIsland.pill(around: indicators)
+        guard pill != systemPill else { return }
+        systemPill = pill
+        systemIslandClearance = NotchSystemIsland.clearance(cameraMidX: camera.midX, indicators: indicators)
+        systemIslandDidChange()
+    }
+
+    /// The fit follows the state, so the island is measured again.
+    private func systemIslandDidChange() {
+        updateScreen()
         refreshPresentation()
     }
+
+    /// The tap zone around the system's pill, while it shows and the island is closed.
+    private func updateTapZone() {
+        guard running, !expanded, geometry.cameraIsPill, let pill = systemPill, let panel,
+              let screen = NSScreen.screens.first?.frame else { tapZone.hide(); return }
+        let zone = NotchPillTapZone.current()
+        // The window list counts from the top of the primary display.
+        let flipped = CGRect(x: pill.minX, y: screen.maxY - pill.maxY, width: pill.width, height: pill.height)
+        var area = flipped.insetBy(dx: -zone.width, dy: -zone.height)
+        area.size.height = min(area.height, geometry.screen.maxY - area.minY)
+        tapZone.show(area, level: panel.level, below: panel.windowNumber) { [weak self] in self?.open() }
+        lastTapZone = area
+    }
+    private var lastTapZone: CGRect?
 
     private var baseSurfaceSize: CGSize {
         if let capsule = capsuleSurfaceSize { return capsule }
@@ -1068,8 +1101,8 @@ final class NotchService: ObservableObject {
     var surfaceShift: CGFloat {
         if showsSystemIslandBubble, let left = systemIslandMinX {
             // A clear gap from the system's pill, so the two read as two.
-            let diameter = geometry.stripHeight
-            return (left - NotchSystemIsland.bubbleGap - diameter / 2 - geometry.screen.midX).rounded()
+            let body = systemIslandBubbleSize.width - NotchLayout.shoulder(height: geometry.stripHeight) * 2
+            return (left - NotchSystemIsland.bubbleGap - body / 2 - geometry.screen.midX).rounded()
         }
         guard !geometry.floats, !fullscreenCompact, captureControls == nil, !expanded, !dragPlaceholder else { return 0 }
         if let notice { return noticeExpanded ? 0 : geometry.noticeShift(notice.wings(in: geometry)) }
@@ -1353,6 +1386,7 @@ final class NotchService: ObservableObject {
         NotchFileToolsService.shared.stop()
         AgentUsageService.shared.stop()
         alignmentGuides.hide()
+        tapZone.hide()
         guard running else { return }
         running = false
         NotchTimerService.shared.stop()
@@ -3719,6 +3753,7 @@ final class NotchService: ObservableObject {
         // Read with the floating buttons rather than on every layout pass,
         // which would decode them each time.
         next.sectionsButtonInRow = !access.actions.contains(.explore)
+        // Behind the system's pill, the open row keeps clear of all of it.
         next.systemIslandWidth = NotchSystemIsland.pillWidth(clearance: systemIslandClearance)
         if next != geometry { menuSpaceGeneration += 1; geometry = next }
         // A new camera or bar, such as a notch fit being adjusted, measures the
@@ -3753,6 +3788,8 @@ final class NotchService: ObservableObject {
 
     /// The island's geometry on a display, before its menus are measured.
     private func baseGeometry(for screen: NSScreen) -> NotchGeometry {
+        // A pill camera's fit follows what the system shows around it; a notch has the one.
+        let pillFit = NotchPillFit.current(for: pillState)
         let cameraWidth: CGFloat
         if let left = screen.auxiliaryTopLeftArea, let right = screen.auxiliaryTopRightArea {
             cameraWidth = max(0, right.minX - left.maxX)
@@ -3766,14 +3803,13 @@ final class NotchService: ObservableObject {
                                 statusBarThickness: NSStatusBar.system.thickness),
                              customWidth: UserDefaults.standard.double(forKey: DefaultsKey.notchCustomWidth),
                              customHeight: UserDefaults.standard.double(forKey: DefaultsKey.notchCustomHeight),
-                             cameraFit: NotchCameraFit.current(), silhouette: NotchSilhouette.current(),
+                             cameraFit: pillFit.camera, silhouette: NotchSilhouette.current(),
                              capsuleFit: NotchCapsuleFit.current(),
                              hideMenuBarGap: UserDefaults.standard.bool(forKey: DefaultsKey.notchHideMenuBarGap),
                              outline: UserDefaults.standard.bool(forKey: DefaultsKey.notchOutlineEnabled),
                              barEdge: 1 / max(1, screen.backingScaleFactor),
                              cameraShape: NotchCameraShape.current(),
-                             pillOffset: NotchCameraShape.currentOffset(),
-                             pillOffsetX: NotchCameraShape.currentOffsetX())
+                             pillOffset: pillFit.offset, pillOffsetX: pillFit.offsetX)
     }
 
     private func updateFullscreenVisibility(displayID: CGDirectDisplayID) {
