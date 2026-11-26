@@ -976,6 +976,15 @@ final class NotchService: ObservableObject {
     /// around a pill camera, or zero while the system shows none.
     private var systemIslandClearance: CGFloat = 0
     private var systemIslandTimer: Timer?
+    private let alignmentGuides = NotchAlignmentGuides()
+
+    /// The closed island's outline and the lines from its edges, while the
+    /// guides are on; open, the island has nothing to line up.
+    private func updateAlignmentGuides() {
+        guard running, NotchAlignmentGuides.isEnabled(), !expanded, let panel,
+              let rect = windowHost?.islandScreenRect else { alignmentGuides.hide(); return }
+        alignmentGuides.show([rect], on: geometry.screen, above: panel.level)
+    }
 
     /// Where macOS's own pill starts, in global points, while it shows one.
     private var systemIslandMinX: CGFloat?
@@ -1343,6 +1352,7 @@ final class NotchService: ObservableObject {
         NotchLyricsService.shared.stop()
         NotchFileToolsService.shared.stop()
         AgentUsageService.shared.stop()
+        alignmentGuides.hide()
         guard running else { return }
         running = false
         NotchTimerService.shared.stop()
@@ -2819,6 +2829,7 @@ final class NotchService: ObservableObject {
         // actual bottom inset as the controls collapse or reopen.
         captureControls?.onCaptureControlsSurfaceChange?(
             geometry.screen, geometry.floatingDrop + size.height)
+        updateAlignmentGuides()
         // Closing can shrink the island away from a pointer that has not moved,
         // with no boundary crossing to report it. Only a pointer still over the
         // island may keep its next approach from opening it.
@@ -3942,6 +3953,7 @@ final class NotchService: ObservableObject {
             self.preferenceSyncWork = nil
             guard self.running else { return }
             self.syncWithPreferences()
+            self.updateAlignmentGuides()
         }
         preferenceSyncWork = work
         DispatchQueue.main.async(execute: work)

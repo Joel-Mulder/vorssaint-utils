@@ -89,6 +89,7 @@ struct NotchSettings: View {
     @AppStorage(DefaultsKey.notchCameraFitHeight) private var cameraFitHeight = 0.0
     @AppStorage(DefaultsKey.notchPillOffset) private var pillOffset = 0.0
     @AppStorage(DefaultsKey.notchPillOffsetX) private var pillOffsetX = 0.0
+    @AppStorage(DefaultsKey.notchAlignmentGuides) private var alignmentGuides = false
     @AppStorage(DefaultsKey.notchCapsuleFitWidth) private var capsuleFitWidth = 0.0
     @AppStorage(DefaultsKey.notchCapsuleFitHeight) private var capsuleFitHeight = 0.0
     @AppStorage(DefaultsKey.notchCapsuleFitDrop) private var capsuleFitDrop = 0.0
@@ -126,7 +127,7 @@ struct NotchSettings: View {
          String(timerEnabled), String(timerSoundEnabled), String(hideTimerCountdown),
          String(cameraEnabled), String(accessoriesEnabled), String(outlineEnabled), String(hideMenuBarGap),
          String(customWidth), String(customHeight), String(cameraFitWidth), String(cameraFitHeight),
-         String(pillOffset), String(pillOffsetX),
+         String(pillOffset), String(pillOffsetX), String(alignmentGuides),
          String(capsuleFitWidth), String(capsuleFitHeight), String(capsuleFitDrop), String(hapticFeedback),
          String(shelfWindow), String(dragReveal), String(captureControls), String(quickPanel), String(appPanel),
          String(hoverExpand), String(hideUntilHover), String(hiddenShowsActivity), String(hideInFullscreen),
@@ -307,6 +308,9 @@ struct NotchSettings: View {
                         }
                     }
                     Text(text.cameraFitHint).font(.caption).foregroundStyle(.secondary)
+                    if NotchSupport.hasPillCameraDisplay {
+                        switchRow("ruler", text.alignmentGuides, isOn: $alignmentGuides)
+                    }
                 }
             }
         }

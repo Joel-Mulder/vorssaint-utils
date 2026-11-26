@@ -22,6 +22,12 @@ enum NotchContentTransition { case none, reveal, dismiss, depart, replace }
 final class NotchWindowHost: NSObject, CAAnimationDelegate {
     let panel: NotchPanel
     private let canvas: NotchCanvas
+
+    /// The island's shape as it is heading to be drawn, in global points.
+    var islandScreenRect: CGRect? {
+        guard panel.isVisible, let box = canvas.destinationBounds else { return nil }
+        return panel.convertToScreen(canvas.convert(box, to: nil))
+    }
     private let quickAccessContainer: NotchQuickAccessContainer?
     private var quickAccessConfiguration: NotchQuickAccessConfiguration?
     private var quickAccessNotchSize = CGSize.zero
@@ -1387,6 +1393,13 @@ private final class NotchCanvas: NSView {
     var visiblePath: CGPath? {
         guard silhouette.animation(forKey: Self.motionKey) != nil else { return silhouette.path.map(inCanvas) }
         return (silhouette.presentation()?.path ?? silhouette.path).map(inCanvas)
+    }
+
+    /// The bounds of the shape the island is drawn or heading to, in the
+    /// canvas's coordinates.
+    var destinationBounds: CGRect? {
+        guard let box = silhouette.path.map(inCanvas)?.boundingBoxOfPath, !box.isNull, !box.isEmpty else { return nil }
+        return box
     }
 
     /// A mask path in the canvas's coordinates.
