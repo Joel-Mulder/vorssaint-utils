@@ -2429,7 +2429,10 @@ struct NotchGeometry: Equatable {
         floatingGap = gap
         // A fitted capsule grows from its top edge, keeping its margins.
         let capsuleFit = gap == nil ? NotchCapsuleFit.zero : capsuleFit
-        floatingDrop = pill ? max(0, pillTop + pillOffset) : capsuleFit.drop
+        // A pill's fit grows it evenly about its centre, as the width does, on
+        // half points: the top moves by half the height's change.
+        let pillGrowth = pill ? (fit.height / 2 * 2).rounded(.down) / 2 : 0
+        floatingDrop = pill ? max(0, pillTop + pillOffset - pillGrowth) : capsuleFit.drop
         capsuleWidthFit = capsuleFit.width
         // The bar ends in a hairline, `barEdge` thick, that reads as its edge:
         // the capsule's margin below is measured from it, as the one above is
